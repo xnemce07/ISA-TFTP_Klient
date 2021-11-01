@@ -9,8 +9,28 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+#define OP_RRQ 1
+#define MAXBUFLEN 100
+#define TIMEOUT 10
+#define BSIZE 600
+
+using namespace std;
+
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET)
+    {
+        return &(((struct sockaddr_in *)sa)->sin_addr);
+    }
+    return &(((struct sockaddr_in6 *)sa)->sin6_addr);
+}
+
+
+
 int main(int argc, char *argv[])
 {
+
+    
     args options;
 
     if (!argparser(&options, argc, argv))
@@ -89,8 +109,51 @@ int main(int argc, char *argv[])
         }
     }
 
+
+    
     freeaddrinfo(client_servinfo);
     //Here we shoul be able to sendto() and recvfrom() p_server for first request, then with port from their info from recvfrom()
 
+    //message building
+    char   message[BSIZE], *p;
+    *(short *)message = htons(OP_RRQ);
+    p = message + 2;
+    strcpy(p, options.path.c_str());			/* The file name */
+    p += options.path.length()    + 1;	/* Keep the nul  */
+    strcpy(p, options.mode.c_str());			/* The Mode      */
+    p += options.mode.length() + 1;
+
+    
+
+
+    //message building end
+    int numbytes = sendto(sockfd, message, p-message, 0, p_server->ai_addr, p_server->ai_addrlen);
+
+    cout << "SENT " << numbytes << "BYTES.\n";
+    cout << "MESSAGE: " << message << endl;
+
+    struct sockaddr_storage their_addr;
+    char buf[MAXBUFLEN];
+    socklen_t addr_len;
+    char s[INET6_ADDRSTRLEN];
+
+    std::cout << "WAITING FOR RESPONSE.\n";
+    addr_len = sizeof(their_addr);
+
+    if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN - 1, 0, (struct sockaddr *)&their_addr, &addr_len)) == -1)
+    {
+        close(sockfd);
+        perror("recvfrom");
+        exit(1);
+    }
+
+    printf("listener: got packet from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s));
+    printf("listener: packet is %d bytes long\n", numbytes);
+
+    buf[numbytes] = '\0';
+    printf("listener: packet contains \"%s\"\n", buf);
+
+    freeaddrinfo(server_servinfo);
+    close(sockfd);
     return 0;
 }

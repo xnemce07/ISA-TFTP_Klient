@@ -83,6 +83,11 @@ bool check_options(args *options)
         return false;
     }
 
+    if(options->path.empty()){
+        std::cerr << "-d (path) is required.\n";
+        return false;
+    }
+
     if (options->mode.compare("ascii") && options->mode.compare("netascii") && options->mode.compare("binary") && options->mode.compare("octet"))
     {
         std::cerr << "Invalid mode(-c) setting, choose ascii, netascii, binary or octet.\n" << options->mode << std::endl;
