@@ -10,7 +10,7 @@ struct args
     bool write = false;
     std::string path = "";
     int timeout = 0;
-    int size = 0;
+    int size = 512;
     bool multicast = false;
     std::string mode = "binary";
     std::string ip = "127.0.0.1";
