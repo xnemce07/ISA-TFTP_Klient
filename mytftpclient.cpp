@@ -1,45 +1,20 @@
 #include <iostream>
+#include <unistd.h>
+#include <fstream>
 
 #include "argparser.h"
+#include "tftp_lib.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <unistd.h>
-#include <fstream>
-
-#define OP_RRQ 1 /* TFTP op-codes */
-#define OP_WRQ 2
-#define OP_DATA 3
-#define OP_ACK 4
-#define OP_ERROR 5
-
-#define MAXBUFLEN 1024
-#define TIMEOUT 10
-#define BSIZE 600
 
 using namespace std;
 
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET)
-    {
-        return &(((struct sockaddr_in *)sa)->sin_addr);
-    }
-    return &(((struct sockaddr_in6 *)sa)->sin6_addr);
-}
-
-string get_filename(string path)
-{
-    return path.substr(path.find_last_of("/")+1);
-}
-
 int main(int argc, char *argv[])
 {
-
-
 
     args options;
 
@@ -53,10 +28,9 @@ int main(int argc, char *argv[])
         return false;
     }
 
-    
-
     //TODO: Randomize tid
     const char *my_tid = "2323";
+    const char *server_tid = "";
 
     //**************Finding a match and creating a socket + bind******************////
     struct addrinfo client_hints, *client_servinfo, *p_client;
@@ -124,40 +98,38 @@ int main(int argc, char *argv[])
     freeaddrinfo(client_servinfo);
     //Here we shoul be able to sendto() and recvfrom() p_server for first request, then with port from their info from recvfrom()
 
-    if (options.write)
+    if (options.read)
     {
-        //open/create file to write in
+        //TODO: check for matching TID's and change all strcpy's to memcpy
+        //TODO: why are line ends different??
         ofstream myfile;
-        myfile.open(get_filename(options.path),ios::out | ios::trunc);
+        myfile.open(get_filename(options.path), ios::out | ios::trunc);
 
-        //message building
-        //TODO: Change this part
-        char message[BSIZE], *p;
-        *(short *)message = htons(OP_RRQ);
-        p = message + 2;
-        strcpy(p, options.path.c_str()); /* The file name */
-        p += options.path.length() + 1;  /* Keep the nul  */
-        strcpy(p, options.mode.c_str()); /* The Mode      */
-        p += options.mode.length() + 1;
-        //message building end
 
-        int sentbytes = sendto(sockfd, message, p - message, 0, p_server->ai_addr, p_server->ai_addrlen);
-
-        cout << "SENT " << sentbytes << "BYTES.\n";
+        char recv_buf[MAXBUFLEN];
+        char send_buf[MAXBUFLEN];
+        int recvbytes;
+        int sentbytes, send_len;
 
         struct sockaddr_storage their_addr;
-        char buf[MAXBUFLEN];
         socklen_t addr_len = sizeof(their_addr);
         char their_ip[INET6_ADDRSTRLEN]; //char their_ip[NI_MAXHOST];
         char their_port[NI_MAXSERV];
-        int recvbytes;
+        int block_number = 0;
+
+        send_len = build_rrq_packet(send_buf, options.path, options.mode);
+
+        sentbytes = sendto(sockfd, send_buf, send_len, 0, p_server->ai_addr, p_server->ai_addrlen);
+
+        cout << "SENT " << sentbytes << "BYTES.\n";
 
         cout << "Waiting for response.\n";
 
         do
         {
+            block_number++;
 
-            if ((recvbytes = recvfrom(sockfd, buf, MAXBUFLEN, 0, (struct sockaddr *)&their_addr, &addr_len)) == -1)
+            if ((recvbytes = recvfrom(sockfd, recv_buf, MAXBUFLEN, 0, (struct sockaddr *)&their_addr, &addr_len)) == -1)
             {
                 close(sockfd);
                 perror("recvfrom");
@@ -165,27 +137,34 @@ int main(int argc, char *argv[])
             }
 
             //source: https://stackoverflow.com/questions/7335738/retrieving-ip-and-port-from-a-sockaddr-storage/39816122
-            if (!getnameinfo((struct sockaddr *)&their_addr, addr_len, their_ip, sizeof(their_ip), their_port, sizeof(their_port), NI_NUMERICHOST | NI_NUMERICSERV))
-            {
-                //cout << "Response from " << their_ip << ":" << their_port << ".\n";
-            }
+            getnameinfo((struct sockaddr *)&their_addr, addr_len, their_ip, sizeof(their_ip), their_port, sizeof(their_port), NI_NUMERICHOST | NI_NUMERICSERV);
 
-            if (ntohs(*(short *)buf) == OP_ERROR)
+            if (ntohs(*(short *)recv_buf) == OP_ERROR)
             {
-                cerr << "rcat: " << buf + 4 << endl;
+                cerr << "Error: " << recv_buf + 4 << endl;
             }
             else
             {
-                //cout << buf + 4;
-                myfile << buf + 4;
+                if (!handle_data_packet(recv_buf, block_number, recvbytes, &myfile))
+                {
+                    cout << "Wrong block number!!\n";
+                }
+                else
+                {
+                    cout << "Received " << recvbytes - 4 << " bytes.\n";
+                }
+                //myfile.write(recv_buf + 4, recvbytes - 4);
 
-                *(short *)buf = htons(OP_ACK);
-                sendto(sockfd, buf, 4, 0, (struct sockaddr *)&their_addr, addr_len);
+                *(short *)recv_buf = htons(OP_ACK);
+                sendto(sockfd, recv_buf, 4, 0, (struct sockaddr *)&their_addr, addr_len);
             }
 
         } while (recvbytes == options.size + 4);
+
+        myfile.close();
     }
 
+    
     freeaddrinfo(server_servinfo);
     close(sockfd);
     return 0;
