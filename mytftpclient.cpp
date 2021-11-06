@@ -13,7 +13,7 @@
 
 #include <ctime>
 
-#define TIMEBUFF_SIZE 30
+#define MAX_RETRIES 3
 
 using namespace std;
 
@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
     }
 
     //TODO: Randomize tid
-    const char *my_tid = "2323";
+    const char *my_tid = "3232";
     const char *server_tid = "";
 
     //**************Finding a match and creating a socket + bind******************////
@@ -42,13 +42,6 @@ int main(int argc, char *argv[])
 
     int rv;
     int sockfd;
-
-    char timebuff[TIMEBUFF_SIZE];
-    time_t rawtime;
-    struct tm *timeinfo;
-
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
 
     //CLIENT getaddrinfo()
     memset(&client_hints, 0, sizeof(client_hints));
@@ -80,20 +73,18 @@ int main(int argc, char *argv[])
             //TODO: check if we also need to compare ai_protocol and ai_socktype
             if (p_server->ai_family != p_client->ai_family)
             {
-                perror("Didnt find a match in ai_family.\n");
+                perror("Didnt find a match in ai_family");
                 continue;
             }
 
             if ((sockfd = socket(p_client->ai_family, p_client->ai_socktype, p_client->ai_protocol)) == -1)
             {
-                perror("socket() failed.\n");
                 continue;
             }
 
             if (bind(sockfd, p_client->ai_addr, p_client->ai_addrlen))
             {
                 close(sockfd);
-                perror("bind() failed.\n");
                 continue;
             }
 
@@ -115,75 +106,14 @@ int main(int argc, char *argv[])
         timeout.tv_usec = 0;
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
         {
-            perror("Setsockopt: ");
+            perror("Setsockopt");
         }
     }
 
-    //Here we shoul be able to sendto() and recvfrom() p_server for first request, then with port from their info from recvfrom()
-
-    // if (options.read)
-    // {
-    //     
-    //     
-    //     ofstream myfile;
-    //     myfile.open(get_filename(options.path), ios::out | ios::trunc);
-
-    //     char recv_buf[MAXBUFLEN];
-    //     char send_buf[MAXBUFLEN];
-    //     int recvbytes;
-    //     int sentbytes, send_len;
-
-    //     struct sockaddr_storage their_addr;
-    //     socklen_t addr_len = sizeof(their_addr);
-    //     char their_ip[INET6_ADDRSTRLEN]; //char their_ip[NI_MAXHOST];
-    //     char their_port[NI_MAXSERV];
-    //     int block_number = 0;
-
-    //     send_len = build_rrq_packet(send_buf, options.path, options.mode);
-
-    //     sentbytes = sendto(sockfd, send_buf, send_len, 0, p_server->ai_addr, p_server->ai_addrlen);
-
-    //     cout << "SENT " << sentbytes << "BYTES.\n";
-
-    //     cout << "Waiting for response.\n";
-
-    //     do
-    //     {
-    //         block_number++;
-    //         if ((recvbytes = recvfrom(sockfd, recv_buf, MAXBUFLEN, 0, (struct sockaddr *)&their_addr, &addr_len)) == -1)
-    //         {
-    //             close(sockfd);
-    //             perror("recvfrom");
-    //             exit(1);
-    //         }
-
-    //         //source: https://stackoverflow.com/questions/7335738/retrieving-ip-and-port-from-a-sockaddr-storage/39816122
-    //         getnameinfo((struct sockaddr *)&their_addr, addr_len, their_ip, sizeof(their_ip), their_port, sizeof(their_port), NI_NUMERICHOST | NI_NUMERICSERV);
-
-    //         if (ntohs(*(short *)recv_buf) == OP_ERROR)
-    //         {
-    //             cerr << "Error: " << recv_buf + 4 << endl;
-    //             break;
-    //         }
-    //         else
-    //         {
-    //             if (handle_data_packet(recv_buf, block_number, recvbytes, &myfile))
-    //             {
-    //                 cout << "Received " << recvbytes - 4 << " bytes.\n";
-    //                 *(short *)recv_buf = htons(OP_ACK);
-
-    //                 sentbytes  = build_ack_packet(send_buf,block_number);
-    //                 sentbytes = sendto(sockfd, recv_buf, sentbytes, 0, (struct sockaddr *)&their_addr, addr_len);
-    //                 cout << "Sent acknowledgement.\n";
-    //             }
-    //         }
-
-    //     } while (recvbytes == options.size + 4);
-
-    //     myfile.close();
-    // }
 
     ofstream file;
+    short retries = 0;
+
     if (options.read)
     {
         file.open(get_filename(options.path), ios::out | ios::trunc);
@@ -194,14 +124,13 @@ int main(int argc, char *argv[])
         int recvlen, sendlen, sentlen, errlen;
         char recvbuf[MAXBUFLEN], sendbuf[MAXBUFLEN], errbuff[MAXBUFLEN];
         char server_IP[INET6_ADDRSTRLEN], server_port[6];
-        char server_TID[6] = "0";
+        char server_TID[6] = "";
         bool errorflag = false;
 
         sendlen = build_rrq_packet(sendbuf, options.path, options.mode);
         sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen);
 
-        strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-        cout << timebuff << "Sent read request the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
+        cout << timestamp() << "Sent read request with the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
 
         do
         {
@@ -214,15 +143,19 @@ int main(int argc, char *argv[])
             {
                 sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                 errorflag = false;
+                retries++;
             }
 
-            strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-            cout << timebuff << "Waiting for response...\n";
+            cout << timestamp() << "Waiting for response...\n";
             recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen);
             if (recvlen < 0)
             {
-                strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-                cout << timebuff << "Connection timed out, sending last packet again.\n";
+                if (retries >= MAX_RETRIES)
+                {
+                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    break;
+                }
+                cout << timestamp() << "Connection timed out, sending last packet again.\n";
                 errorflag = true;
                 recvlen = options.size + 4;
                 continue;
@@ -231,9 +164,12 @@ int main(int argc, char *argv[])
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
             if (!strcmp(server_port, server_TID) && !strcmp(server_port, "0"))
             {
-
-                strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-                cout << timebuff << "TID's don't match, sending last packet again.\n";
+                if (retries >= MAX_RETRIES)
+                {
+                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    break;
+                }
+                cout << timestamp() << "TID's don't match, sending last packet again.\n";
                 errlen = build_error_packet(errbuff, 5, "Unknown TID.\n");
                 sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                 errorflag = true;
@@ -244,31 +180,35 @@ int main(int argc, char *argv[])
 
             if (ntohs(*(short *)recvbuf) == OP_ERROR)
             {
-                strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-                cerr << timebuff << "Error: " << recvbuf + 4 << endl;
+                cerr << "Error: " << recvbuf + 4 << endl;
                 break;
             }
             else
             {
                 if (handle_data_packet(recvbuf, block_no, recvlen, &file))
                 {
-                    strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-                    cout << timebuff << "Received " << recvlen - 4 << " bytes from " << server_IP << ':' << server_port << endl;
+
+                    cout << timestamp() << "Received " << recvlen - 4 << " bytes from " << server_IP << ':' << server_port << endl;
 
                     sendlen = build_ack_packet(sendbuf, block_no);
                     sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen);
-                    strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-                    cout << timebuff << "Sent acknowledgement to " << server_IP << ':' << server_port << endl;
+
+                    cout << timestamp() << "Sent acknowledgement to " << server_IP << ':' << server_port << endl;
                 }
                 else
                 {
-                    strftime(timebuff, TIMEBUFF_SIZE, "[%F %X]\t", timeinfo);
-                    cout << timebuff << "Unexpected block number, sending last packet again.\n";
+                    if (retries >= MAX_RETRIES)
+                    {
+                        cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                        break;
+                    }
+                    cout << timestamp() << "Unexpected block number, sending last packet again.\n";
                     errorflag = true;
                     continue;
                 }
             }
 
+            retries = 0;
         } while (recvlen == options.size + 4);
 
         file.close();

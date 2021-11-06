@@ -94,3 +94,10 @@ bool handle_ack_packet(char *buffer, int expected_block_no);
  * @return false If block numbers don't match
  */
 bool handle_data_packet(char *buffer, int expected_block_no, int recvbytes, ofstream *file);
+
+/**
+ * @brief Creates string with current time in format [%YYYY-%MM-%DD %hh:%mm:%ss] + tab space
+ * 
+ * @return String with the timestamp
+ */
+string timestamp();
