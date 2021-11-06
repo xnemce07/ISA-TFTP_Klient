@@ -52,7 +52,7 @@ int build_wrq_packet(char *buffer, string path, string mode);
  * @param data Data to send
  * @return Length of the packet
  */
-int build_data_packet(char *buffer, char *block_no, char *data);
+int build_data_packet(char *buffer, int block_no, char *data);
 
 /**
  * @brief Build an acknowledgement packet
@@ -61,7 +61,7 @@ int build_data_packet(char *buffer, char *block_no, char *data);
  * @param block_no Block number of the acknowledged packet
  * @return Length of the packet
  */
-int build_ack_packet(char *buffer, char *block_no);
+int build_ack_packet(char *buffer, int block_no);
 
 /**
  * @brief Build an error packet
