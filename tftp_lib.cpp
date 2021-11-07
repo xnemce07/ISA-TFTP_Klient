@@ -1,5 +1,7 @@
 #include "tftp_lib.h"
 
+#include <chrono>
+
 using namespace std;
 
 string get_filename(string path)
@@ -94,15 +96,33 @@ bool handle_ack_packet(char *buffer, int expected_block_no)
     return ntohs(*(short *)block_no) == expected_block_no;
 }
 
+//Source: https://stackoverflow.com/a/50923834
+//Author: Enrico Pintus https://stackoverflow.com/users/7394372/enrico-pintus
 string timestamp()
 {
-    time_t rawtime;
-    struct tm *timeinfo;
+    // time_t rawtime;
+    // struct tm *timeinfo;
+    // char buffer[30];
+
+    // time(&rawtime);
+    // timeinfo = localtime(&rawtime);
+
+    // strftime(buffer, 30, "[%F %T]\t", timeinfo);
+    // return string(buffer);
+
+    //using chrono::system_clock;
+    auto currentTime = chrono::system_clock::now();
     char buffer[30];
 
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
+    auto transformed = currentTime.time_since_epoch().count() / 1000000;
 
-    strftime(buffer, 30, "[%F %T]\t", timeinfo);
+    auto millis = transformed % 1000;
+
+    time_t tt;
+    tt = chrono::system_clock::to_time_t(currentTime);
+    auto timeinfo = localtime(&tt);
+    strftime(buffer, 30, "[%F %H:%M:%S", timeinfo);
+    sprintf(buffer, "%s.%03d]\t", buffer, (int)millis);
+
     return string(buffer);
 }

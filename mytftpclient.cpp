@@ -11,7 +11,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include <ctime>
 
 #define MAX_RETRIES 3
 
@@ -110,7 +109,6 @@ int main(int argc, char *argv[])
         }
     }
 
-
     ofstream file;
     short retries = 0;
 
@@ -127,28 +125,49 @@ int main(int argc, char *argv[])
         char server_TID[6] = "";
         bool errorflag = false;
 
+        //Sending write request
         sendlen = build_rrq_packet(sendbuf, options.path, options.mode);
-        sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen);
-
-        cout << timestamp() << "Sent read request with the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
+        if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
+        {
+            cout << timestamp() << "Sending request packet: " << strerror(errno) << " Sending packet again.\n";
+            block_no = 1;
+            errorflag = true;
+        }
+        else
+        {
+            cout << timestamp() << "Sent read request with the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
+        }
 
         do
         {
 
-            if (!errorflag)
+            if (errorflag) //On error, last packet is sent again
             {
-                block_no++;
+                retries++;
+                if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
+                {
+                    if (retries >= MAX_RETRIES)
+                    {
+                        cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                        break;
+                    }
+                    cout << timestamp() << "Resending last packet: " << strerror(errno) << endl;
+                    continue;
+                }
+                else
+                {
+                    cout << timestamp() << "Sent " << sentlen << "bytes to " << server_IP << ':' << server_port << endl;
+                    errorflag = false;
+                }
             }
             else
             {
-                sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen);
-                errorflag = false;
-                retries++;
+                block_no++;
             }
 
             cout << timestamp() << "Waiting for response...\n";
-            recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen);
-            if (recvlen < 0)
+            //Recieving packet
+            if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
                 if (retries >= MAX_RETRIES)
                 {
@@ -157,10 +176,10 @@ int main(int argc, char *argv[])
                 }
                 cout << timestamp() << "Connection timed out, sending last packet again.\n";
                 errorflag = true;
-                recvlen = options.size + 4;
                 continue;
             }
 
+            //Checking TID
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
             if (!strcmp(server_port, server_TID) && !strcmp(server_port, "0"))
             {
@@ -169,7 +188,7 @@ int main(int argc, char *argv[])
                     cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
                     break;
                 }
-                cout << timestamp() << "TID's don't match, sending last packet again.\n";
+                cout << timestamp() << "TID's don't match, sending error packet and last sent packet.\n";
                 errlen = build_error_packet(errbuff, 5, "Unknown TID.\n");
                 sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                 errorflag = true;
@@ -178,22 +197,35 @@ int main(int argc, char *argv[])
 
             strcpy(server_TID, server_port);
 
-            if (ntohs(*(short *)recvbuf) == OP_ERROR)
+            //Handling packet depending on its type
+            if (ntohs(*(short *)recvbuf) == OP_ERROR) //Handling of error packet
             {
-                cerr << "Error: " << recvbuf + 4 << endl;
+                cout << timestamp() << "Error: " << recvbuf + 4 << endl;
                 break;
             }
-            else
+            else if (ntohs(*(short *)recvbuf) == OP_DATA) //Handling of data packet
             {
                 if (handle_data_packet(recvbuf, block_no, recvlen, &file))
                 {
 
-                    cout << timestamp() << "Received " << recvlen - 4 << " bytes from " << server_IP << ':' << server_port << endl;
+                    cout << timestamp() << "Received data packet with block number " << block_no << " and size " << recvlen - 4 << " bytes from " << server_IP << ':' << server_port << endl;
 
                     sendlen = build_ack_packet(sendbuf, block_no);
-                    sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen);
-
-                    cout << timestamp() << "Sent acknowledgement to " << server_IP << ':' << server_port << endl;
+                    if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)
+                    {
+                        if (retries >= MAX_RETRIES)
+                        {
+                            cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                            break;
+                        }
+                        cout << timestamp() << "Sending request packet: " << strerror(errno) << " Sending packet again.\n";
+                        errorflag = true;
+                        continue;
+                    }
+                    else
+                    {
+                        cout << timestamp() << "Sent acknowledgement to " << server_IP << ':' << server_port << endl;
+                    }
                 }
                 else
                 {
@@ -207,9 +239,21 @@ int main(int argc, char *argv[])
                     continue;
                 }
             }
+            else //While reading from server, no other packet type is expected
+            {
 
-            retries = 0;
-        } while (recvlen == options.size + 4);
+                if (retries >= MAX_RETRIES)
+                {
+                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    break;
+                }
+                cout << timestamp() << "Unexpected packet type, sending last packet again.\n";
+                errorflag = true;
+                continue;
+            }
+
+            retries = 0; //When this point is reached, any unsuccessful operation had to be completed, so we reset the retries counter
+        } while (recvlen == options.size + 4 || errorflag);
 
         file.close();
     }

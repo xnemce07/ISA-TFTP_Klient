@@ -96,7 +96,7 @@ bool handle_ack_packet(char *buffer, int expected_block_no);
 bool handle_data_packet(char *buffer, int expected_block_no, int recvbytes, ofstream *file);
 
 /**
- * @brief Creates string with current time in format [%YYYY-%MM-%DD %hh:%mm:%ss] + tab space
+ * @brief Creates string with current time in format [YYYY-MM-DD hh:mm:ss.ms] + tab space
  * 
  * @return String with the timestamp
  */
