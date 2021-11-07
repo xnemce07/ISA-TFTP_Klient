@@ -33,5 +33,11 @@
 
 .vscode
 mytftpclient
-*.txt
+
+# Downloaded files
 lorem
+*.docx
+*.gif
+*.jpg
+*.pptx
+*.txt
