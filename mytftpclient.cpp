@@ -13,13 +13,10 @@
 
 #define MAX_RETRIES 3
 
-
 using namespace std;
 
 int main(int argc, char *argv[])
 {
-
-    
 
     args options;
 
@@ -35,7 +32,6 @@ int main(int argc, char *argv[])
 
     //TODO: Randomize tid
     const char *my_tid = "3232";
-    
 
     //**************Finding a match and creating a socket + bind******************////
     struct addrinfo client_hints, *client_servinfo, *p_client;
@@ -128,12 +124,13 @@ int main(int argc, char *argv[])
     bool errorflag = false;
     short retries = 0;
 
+    //************************************READING FROM SERVER*************************************//
     if (options.read)
     {
         ofstream file;
         file.open(get_filename(options.path), ios::out | ios::trunc);
 
-        //Sending write request
+        //**********************************SENDING WRITE REQUEST**************************//
         sendlen = build_rrq_packet(sendbuf, options.path, options.mode);
         if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
         {
@@ -149,6 +146,7 @@ int main(int argc, char *argv[])
         do
         {
 
+            //************SENDING LAST PACKET AGAIN ON ERROR*******************//
             if (errorflag) //On error, last packet is sent again
             {
                 retries++;
@@ -160,21 +158,23 @@ int main(int argc, char *argv[])
                         break;
                     }
                     cout << timestamp() << "Resending last packet error: " << strerror(errno) << endl;
+                    errorflag = true;
                     continue;
                 }
                 else
                 {
-                    cout << timestamp() << "Sent last " << sentlen << " bytes again" << endl;
+                    cout << timestamp() << "Sent last packet with size of" << sentlen << " bytes again" << endl;
                     errorflag = false;
                 }
             }
-            else
+            else //Block number is increased only if we are sending new packet
             {
                 block_no++;
             }
 
+            /********************RECIEVING AND HANDLING FIRST ACK PACKET*****************/
             cout << timestamp() << "Waiting for response...\n";
-            //Recieving packet
+
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
                 if (retries >= MAX_RETRIES)
@@ -189,7 +189,12 @@ int main(int argc, char *argv[])
 
             //Checking TID
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
-            if (!(strcmp(server_port, server_TID) || strcmp(server_port, "0")))
+
+            if (!strcmp(server_TID, "0")) //If server_TID is 0, no TID was chosen before (This is the first ACK packet received), so we set it's value
+            {
+                strcpy(server_TID, server_port);
+            }
+            else if ((strcmp(server_port, server_TID))) //TID doesn't match server port
             {
                 if (retries >= MAX_RETRIES)
                 {
@@ -203,9 +208,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            strcpy(server_TID, server_port);
-
-            //Handling packet depending on its type
+            //Looking at type of received packet
             if (ntohs(*(short *)recvbuf) == OP_ERROR) //Handling of error packet
             {
                 cout << timestamp() << "Error: " << recvbuf + 4 << endl;
@@ -265,7 +268,7 @@ int main(int argc, char *argv[])
 
         file.close();
     }
-    else
+    else //********************************WRITING TO SERVER****************************//
     {
         ifstream file;
         file.open(options.path, ios::in | ios::binary);
@@ -273,8 +276,11 @@ int main(int argc, char *argv[])
 
         sendlen = build_wrq_packet(sendbuf, get_filename(options.path), options.mode);
 
-        do
+        //******************************ESTABLISHING CONNECTION*************************//
+
+        do //do-while fo repeating request if something goes bad
         {
+            //******************SENDING REQUEST PACKET******************************//
             if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
             {
                 if (retries >= MAX_RETRIES)
@@ -292,6 +298,7 @@ int main(int argc, char *argv[])
                 cout << timestamp() << "Sent write request with the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
             }
 
+            //********************RECIEVING AND HANDLING FIRST ACK PACKET*****************//
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
                 if (retries >= MAX_RETRIES)
@@ -305,18 +312,18 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-
-
+            //Getting TID
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
             strcpy(server_TID, server_port);
             cout << "SERVER TID: " << server_TID << endl;
 
-            if (ntohs(*(short *)recvbuf) == OP_ERROR)
+            //Looking at type of packet
+            if (ntohs(*(short *)recvbuf) == OP_ERROR) //Error packet
             {
                 cout << timestamp() << "Error: " << recvbuf + 4 << endl;
                 return 0; //TODO:END OP, NOT PROGRAM
             }
-            else if (ntohs(*(short *)recvbuf) == OP_ACK)
+            else if (ntohs(*(short *)recvbuf) == OP_ACK) //ACK Packet
             {
                 if (!handle_ack_packet(recvbuf, block_no))
                 {
@@ -335,7 +342,7 @@ int main(int argc, char *argv[])
                     cout << timestamp() << "Recieved acknowledgement packet with block number 0.\n";
                 }
             }
-            else
+            else //Other packet types are not expected -> error
             {
                 if (retries >= MAX_RETRIES)
                 {
@@ -354,21 +361,24 @@ int main(int argc, char *argv[])
 
         cout << "CONNECTION ESTABLISHED.\n";
 
+        //*********************************SENDING DATA LOOP****************************//
+
         do
         {
-            if (!errorflag)
+            //***********************************SENDING DATA PACKET*******************************//
+            if (!errorflag) //On error, last packet will be sent, so we wont be incrementing block number, reading data from file ,or creating another data packet
             {
                 block_no++;
 
-                memset(data,0,MAX_DATA_LEN);
+                memset(data, 0, MAX_DATA_LEN);
                 file.read(data, options.size);
-                //data[options.size] = '\0';
-                cout << "STRLEN " << strlen(data) << " SIZEOF: " << sizeof(data) << endl;
 
-                sendlen = build_data_packet(sendbuf, block_no, data,strlen(data));
+
+                sendlen = build_data_packet(sendbuf, block_no, data, strlen(data));
             }
             sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen);
 
+            //********************RECIEVING AND HANDLING FIRST ACK PACKET*****************//
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
                 if (retries >= MAX_RETRIES)
@@ -382,10 +392,11 @@ int main(int argc, char *argv[])
                 continue;
             }
 
+            //Checking for correct TID
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
-            if (strcmp(server_port, server_TID))
+            if (strcmp(server_port, server_TID)) //TID doesn't match
             {
-                
+
                 if (retries >= MAX_RETRIES)
                 {
                     cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
@@ -399,16 +410,17 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            if (ntohs(*(short *)recvbuf) == OP_ERROR)
+            //Looking at type of the packet
+            if (ntohs(*(short *)recvbuf) == OP_ERROR) //Error packet
             {
                 cout << timestamp() << "Error: " << recvbuf + 4 << endl;
                 freeaddrinfo(server_servinfo);
                 break;
             }
-            else if (ntohs(*(short *)recvbuf) == OP_ACK)
+            else if (ntohs(*(short *)recvbuf) == OP_ACK) //ACK packet
             {
-                //handle ack packet and continue
-                if (!handle_ack_packet(recvbuf, block_no))
+                //Checking packet's block number
+                if (!handle_ack_packet(recvbuf, block_no)) //Block number is incorrect
                 {
                     if (retries >= MAX_RETRIES)
                     {
@@ -425,12 +437,21 @@ int main(int argc, char *argv[])
                     cout << timestamp() << "Recieved acknowledgement packet with block number " << block_no << ".\n";
                 }
             }
-            else
+            else //Any other packet type is unexpected
             {
-                break;
+                if (retries >= MAX_RETRIES)
+                {
+                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    break;
+                }
+                retries++;
+                cout << timestamp() << "Unexpected packet type, sending last packet again.\n";
+                errorflag = true;
+                continue;
             }
 
-        } while (sentlen == options.size + 4 || errorflag);
+            retries = 0;
+        } while (sentlen == options.size + 4 || errorflag); //Loop continues until data size is less than selected and no packet is waiting to be sent again
 
         file.close();
     }
