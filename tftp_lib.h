@@ -12,6 +12,7 @@
 #define OP_ERROR 5
 
 #define MAXBUFLEN 1024
+#define MAX_DATA_LEN 600
 #define TIMEOUT 10
 
 using namespace std;
@@ -52,7 +53,7 @@ int build_wrq_packet(char *buffer, string path, string mode);
  * @param data Data to send
  * @return Length of the packet
  */
-int build_data_packet(char *buffer, int block_no, char *data);
+int build_data_packet(char *buffer, int block_no, char *data,int size);
 
 /**
  * @brief Build an acknowledgement packet

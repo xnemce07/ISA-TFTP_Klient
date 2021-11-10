@@ -13,10 +13,13 @@
 
 #define MAX_RETRIES 3
 
+
 using namespace std;
 
 int main(int argc, char *argv[])
 {
+
+    
 
     args options;
 
@@ -32,7 +35,7 @@ int main(int argc, char *argv[])
 
     //TODO: Randomize tid
     const char *my_tid = "3232";
-    const char *server_tid = "";
+    
 
     //**************Finding a match and creating a socket + bind******************////
     struct addrinfo client_hints, *client_servinfo, *p_client;
@@ -186,7 +189,7 @@ int main(int argc, char *argv[])
 
             //Checking TID
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
-            if (!strcmp(server_port, server_TID) && !strcmp(server_port, "0"))
+            if (!(strcmp(server_port, server_TID) || strcmp(server_port, "0")))
             {
                 if (retries >= MAX_RETRIES)
                 {
@@ -194,7 +197,7 @@ int main(int argc, char *argv[])
                     break;
                 }
                 cout << timestamp() << "TID's don't match, sending error packet and last sent packet.\n";
-                errlen = build_error_packet(errbuff, 5, "Unknown TID.\n");
+                errlen = build_error_packet(errbuff, 5, "Unknown TID.");
                 sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                 errorflag = true;
                 continue;
@@ -265,8 +268,8 @@ int main(int argc, char *argv[])
     else
     {
         ifstream file;
-        file.open(options.path, ios::in);
-        char *data;
+        file.open(options.path, ios::in | ios::binary);
+        char data[MAX_DATA_LEN];
 
         sendlen = build_wrq_packet(sendbuf, get_filename(options.path), options.mode);
 
@@ -302,8 +305,11 @@ int main(int argc, char *argv[])
                 continue;
             }
 
+
+
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
             strcpy(server_TID, server_port);
+            cout << "SERVER TID: " << server_TID << endl;
 
             if (ntohs(*(short *)recvbuf) == OP_ERROR)
             {
@@ -346,17 +352,22 @@ int main(int argc, char *argv[])
             errorflag = false;
         } while (errorflag);
 
+        cout << "CONNECTION ESTABLISHED.\n";
+
         do
         {
             if (!errorflag)
             {
                 block_no++;
 
+                memset(data,0,MAX_DATA_LEN);
                 file.read(data, options.size);
+                //data[options.size] = '\0';
+                cout << "STRLEN " << strlen(data) << " SIZEOF: " << sizeof(data) << endl;
 
-                sendlen = build_data_packet(sendbuf, block_no, data);
+                sendlen = build_data_packet(sendbuf, block_no, data,strlen(data));
             }
-            sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen);
+            sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen);
 
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
@@ -365,21 +376,24 @@ int main(int argc, char *argv[])
                     cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
                     break;
                 }
+                retries++;
                 cout << timestamp() << "Connection timed out, sending last packet again.\n";
                 errorflag = true;
                 continue;
             }
 
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
-            if (!strcmp(server_port, server_TID))
+            if (strcmp(server_port, server_TID))
             {
+                
                 if (retries >= MAX_RETRIES)
                 {
                     cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
                     break;
                 }
+                retries++;
                 cout << timestamp() << "TID's don't match, sending error packet and last sent packet.\n";
-                errlen = build_error_packet(errbuff, 5, "Unknown TID.\n");
+                errlen = build_error_packet(errbuff, 5, "Unknown TID.");
                 sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                 errorflag = true;
                 continue;
@@ -416,7 +430,7 @@ int main(int argc, char *argv[])
                 break;
             }
 
-        } while (sentlen = options.size + 4 || errorflag);
+        } while (sentlen == options.size + 4 || errorflag);
 
         file.close();
     }

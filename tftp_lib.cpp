@@ -33,15 +33,16 @@ int build_wrq_packet(char *buffer, string path, string mode)
     return len;
 }
 
-int build_data_packet(char *buffer, int block_no, char *data)
+int build_data_packet(char *buffer, int block_no, char *data, int size)
 {
+    
     memset(buffer, 0, MAXBUFLEN);
     int len = 2;
     *(short *)buffer = htons(OP_DATA);
     *(short *)(buffer + 2) = htons(block_no);
     len += 2;
-    memcpy(buffer + len, data, strlen(data));
-    len += strlen(data);
+    memcpy(buffer + len, data, size);
+    len += size;
     return len;
 }
 
@@ -59,7 +60,7 @@ int build_error_packet(char *buffer, int error_code, string error_message)
 {
     memset(buffer, 0, MAXBUFLEN);
     int len = 2;
-    *(short *)buffer = htons(OP_ACK);
+    *(short *)buffer = htons(OP_ERROR);
     *(short *)(buffer + len) = htons(error_code);
     len += 3;
     memcpy(buffer + len, error_message.c_str(), error_message.length());
@@ -112,7 +113,7 @@ string timestamp()
 
     //using chrono::system_clock;
     auto currentTime = chrono::system_clock::now();
-    char buffer[30];
+    char buffer[50];
 
     auto transformed = currentTime.time_since_epoch().count() / 1000000;
 
@@ -121,7 +122,7 @@ string timestamp()
     time_t tt;
     tt = chrono::system_clock::to_time_t(currentTime);
     auto timeinfo = localtime(&tt);
-    strftime(buffer, 30, "[%F %H:%M:%S", timeinfo);
+    strftime(buffer, 50, "[%F %H:%M:%S", timeinfo);
     sprintf(buffer, "%s.%03d]\t", buffer, (int)millis);
 
     return string(buffer);
