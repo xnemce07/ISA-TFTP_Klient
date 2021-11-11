@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <fstream>
 
-#include "argparser.h"
+#include "option_parser.h"
 #include "tftp_lib.h"
 
 #include <sys/types.h>
@@ -19,20 +19,18 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    args options;
+    //TODO: MEMORY LEAKS
+    //TODO: PUT EVERYTHING IN A LOOP
+    args* options = new(args);
 
-    if (!argparser(&options, argc, argv))
-    {
-        return false;
-    }
 
-    if (!check_options(&options))
-    {
-        return false;
-    }
+
+    get_options(options);
+
+
 
     //TODO: Randomize tid
-    //TODO: Do I even need to set my own TID and use bind()??
+    //TODO: Do I even need to set my own TID and use bind()?? yes
     const char *my_tid = "3232";
 
     //**************Finding a match and creating a socket + bind******************////
@@ -59,7 +57,7 @@ int main(int argc, char *argv[])
     server_hints.ai_family = AF_UNSPEC;
     server_hints.ai_socktype = SOCK_DGRAM;
 
-    if ((rv = getaddrinfo(options.ip.c_str(), options.port.c_str(), &server_hints, &server_servinfo)) != 0)
+    if ((rv = getaddrinfo(options->ip.c_str(), options->port.c_str(), &server_hints, &server_servinfo)) != 0)
     {
         cerr << "Server getaddrinfo: " << gai_strerror(rv) << endl;
         return 1;
@@ -106,10 +104,10 @@ int main(int argc, char *argv[])
 
     freeaddrinfo(client_servinfo);
 
-    if (options.timeout > 0)
+    if (options->timeout > 0)
     {
         struct timeval timeout;
-        timeout.tv_sec = options.timeout;
+        timeout.tv_sec = options->timeout;
         timeout.tv_usec = 0;
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
         {
@@ -128,13 +126,13 @@ int main(int argc, char *argv[])
     short retries = 0;
 
     //************************************READING FROM SERVER*************************************//
-    if (options.read)
+    if (options->read)
     {
         ofstream file;
-        file.open(get_filename(options.path), ios::out | ios::trunc);
+        file.open(get_filename(options->path), ios::out | ios::trunc);
 
         //**********************************SENDING WRITE REQUEST**************************//
-        sendlen = build_rrq_packet(sendbuf, options.path, options.mode);
+        sendlen = build_rrq_packet(sendbuf, options->path, options->mode);
         if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
         {
             cout << timestamp() << "Sending read request packet error: " << strerror(errno) << " Attempting to send packet again\n";
@@ -144,7 +142,7 @@ int main(int argc, char *argv[])
         else
         {
             //TODO: Get address from p_server
-            cout << timestamp() << "Sent read request to server " << options.ip << ':' << options.port << endl;
+            cout << timestamp() << "Sent read request to server " << options->ip << ':' << options->port << endl;
         }
 
         do
@@ -266,7 +264,7 @@ int main(int argc, char *argv[])
             }
 
             retries = 0; //When this point is reached, any unsuccessful operation had to be completed, so we reset the retries counter
-        } while (recvlen == options.size + 4 || errorflag);
+        } while (recvlen == options->size + 4 || errorflag);
 
         if (!errorflag)
         {
@@ -277,10 +275,10 @@ int main(int argc, char *argv[])
     else //**************************************************WRITING TO SERVER********************************************************************//
     {
         ifstream file;
-        file.open(options.path, ios::in | ios::binary);
+        file.open(options->path, ios::in | ios::binary);
         char data[MAX_DATA_LEN];
 
-        sendlen = build_wrq_packet(sendbuf, get_filename(options.path), options.mode);
+        sendlen = build_wrq_packet(sendbuf, get_filename(options->path), options->mode);
 
         //******************************ESTABLISHING CONNECTION*************************//
 
@@ -301,7 +299,7 @@ int main(int argc, char *argv[])
             }
             else
             {
-                cout << timestamp() << "Sent write request to server " << options.ip << ':' << options.port << endl;
+                cout << timestamp() << "Sent write request to server " << options->ip << ':' << options->port << endl;
             }
 
             //********************RECIEVING AND HANDLING FIRST ACK PACKET*****************//
@@ -376,7 +374,7 @@ int main(int argc, char *argv[])
                 block_no++;
 
                 memset(data, 0, MAX_DATA_LEN);
-                file.read(data, options.size);
+                file.read(data, options->size);
 
                 sendlen = build_data_packet(sendbuf, block_no, data, strlen(data));
             }
@@ -478,7 +476,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-        } while (sentlen == options.size + 4 || errorflag); //Loop continues until data size is less than selected and no packet is waiting to be sent again
+        } while (sentlen == options->size + 4 || errorflag); //Loop continues until data size is less than selected and no packet is waiting to be sent again
 
         if (!errorflag)
         {
