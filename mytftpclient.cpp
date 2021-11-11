@@ -11,7 +11,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define MAX_RETRIES 3
+#define MAX_RETRIES 1
+#define PORTLEN 6
 
 using namespace std;
 
@@ -31,6 +32,7 @@ int main(int argc, char *argv[])
     }
 
     //TODO: Randomize tid
+    //TODO: Do I even need to set my own TID and use bind()??
     const char *my_tid = "3232";
 
     //**************Finding a match and creating a socket + bind******************////
@@ -78,11 +80,12 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            if (bind(sockfd, p_client->ai_addr, p_client->ai_addrlen))
-            {
-                close(sockfd);
-                continue;
-            }
+            //TODO: delete this
+            // if (bind(sockfd, p_client->ai_addr, p_client->ai_addrlen))
+            // {
+            //     close(sockfd);
+            //     continue;
+            // }
 
             break;
         }
@@ -119,8 +122,8 @@ int main(int argc, char *argv[])
     int block_no = 0;
     int recvlen, sendlen, sentlen, errlen;
     char recvbuf[MAXBUFLEN], sendbuf[MAXBUFLEN], errbuff[MAXBUFLEN];
-    char server_IP[INET6_ADDRSTRLEN], server_port[6];
-    char server_TID[6] = "";
+    char server_IP[INET6_ADDRSTRLEN], server_port[PORTLEN];
+    char server_TID[PORTLEN] = "0";
     bool errorflag = false;
     short retries = 0;
 
@@ -134,13 +137,14 @@ int main(int argc, char *argv[])
         sendlen = build_rrq_packet(sendbuf, options.path, options.mode);
         if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
         {
-            cout << timestamp() << "Sending read request packet error: " << strerror(errno) << " Sending packet again.\n";
+            cout << timestamp() << "Sending read request packet error: " << strerror(errno) << " Attempting to send packet again\n";
             block_no = 1;
             errorflag = true;
         }
         else
         {
-            cout << timestamp() << "Sent read request with the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
+            //TODO: Get address from p_server
+            cout << timestamp() << "Sent read request to server " << options.ip << ':' << options.port << endl;
         }
 
         do
@@ -152,18 +156,18 @@ int main(int argc, char *argv[])
                 retries++;
                 if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
                 {
+                    errorflag = true;
                     if (retries >= MAX_RETRIES)
                     {
-                        cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                        cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
                     cout << timestamp() << "Resending last packet error: " << strerror(errno) << endl;
-                    errorflag = true;
                     continue;
                 }
                 else
                 {
-                    cout << timestamp() << "Sent last packet with size of" << sentlen << " bytes again" << endl;
+                    cout << timestamp() << "Sent last packet with a size of" << sentlen << " bytes again" << endl;
                     errorflag = false;
                 }
             }
@@ -173,17 +177,16 @@ int main(int argc, char *argv[])
             }
 
             /********************RECIEVING AND HANDLING FIRST ACK PACKET*****************/
-            cout << timestamp() << "Waiting for response...\n";
 
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
-                cout << timestamp() << "Connection timed out, sending last packet again.\n";
-                errorflag = true;
+                cout << timestamp() << "Connection timed out, sending last packet again\n";
                 continue;
             }
 
@@ -196,79 +199,83 @@ int main(int argc, char *argv[])
             }
             else if ((strcmp(server_port, server_TID))) //TID doesn't match server port
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
-                cout << timestamp() << "TID's don't match, sending error packet and last sent packet.\n";
-                errlen = build_error_packet(errbuff, 5, "Unknown TID.");
+                cout << timestamp() << "Received packet with unexpected TID, sending last packet again and error packet\n";
+                errlen = build_error_packet(errbuff, 5, "Unexpected TID");
                 sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
-                errorflag = true;
                 continue;
             }
 
             //Looking at type of received packet
-            if (ntohs(*(short *)recvbuf) == OP_ERROR) //Handling of error packet
+            if (get_packet_type_code(recvbuf) == OP_ERROR) //Handling of error packet
             {
                 cout << timestamp() << "Error: " << recvbuf + 4 << endl;
                 break;
             }
-            else if (ntohs(*(short *)recvbuf) == OP_DATA) //Handling of data packet
+            else if (get_packet_type_code(recvbuf) == OP_DATA) //Handling of data packet
             {
                 if (handle_data_packet(recvbuf, block_no, recvlen, &file))
                 {
 
-                    cout << timestamp() << "Received data packet with block number " << block_no << " and size " << recvlen - 4 << " bytes from " << server_IP << ':' << server_port << endl;
+                    cout << timestamp() << "Received data packet with a size of " << recvlen - 4 << " bytes\n";
 
                     sendlen = build_ack_packet(sendbuf, block_no);
                     if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)
                     {
+                        errorflag = true;
                         if (retries >= MAX_RETRIES)
                         {
-                            cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                            cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                             break;
                         }
-                        cout << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again.\n";
-                        errorflag = true;
+                        cout << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again\n";
                         continue;
                     }
                     else
                     {
-                        cout << timestamp() << "Sent acknowledgement to " << server_IP << ':' << server_port << endl;
+                        cout << timestamp() << "Sent acknowledgement packet with block number " << block_no << endl;
                     }
                 }
                 else
                 {
+                    errorflag = true;
                     if (retries >= MAX_RETRIES)
                     {
-                        cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                        cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
-                    cout << timestamp() << "Unexpected block number, sending last packet again.\n";
-                    errorflag = true;
+                    cout << timestamp() << "Recieved packet with unexpected block number, sending last packet again.\n";
                     continue;
                 }
             }
             else //While reading from server, no other packet type is expected
             {
 
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
-                cout << timestamp() << "Unexpected packet type, sending last packet again.\n";
-                errorflag = true;
+                cout << timestamp() << "Received packet with unexpected packet type, sending last packet again\n";
                 continue;
             }
 
             retries = 0; //When this point is reached, any unsuccessful operation had to be completed, so we reset the retries counter
         } while (recvlen == options.size + 4 || errorflag);
 
+        if (!errorflag)
+        {
+            cout << timestamp() << "Transfer completed\n";
+        }
         file.close();
     }
-    else //********************************WRITING TO SERVER****************************//
+    else //**************************************************WRITING TO SERVER********************************************************************//
     {
         ifstream file;
         file.open(options.path, ios::in | ios::binary);
@@ -283,39 +290,38 @@ int main(int argc, char *argv[])
             //******************SENDING REQUEST PACKET******************************//
             if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
-                cout << timestamp() << "Sending write request packet error: " << strerror(errno) << " Sending packet again.\n";
+                cout << timestamp() << "Sending write request packet error: " << strerror(errno) << " Sending packet again\n";
                 retries++;
-                errorflag = true;
                 continue;
             }
             else
             {
-                cout << timestamp() << "Sent write request with the size of " << sentlen << " bytes to " << options.ip << ':' << options.port << endl;
+                cout << timestamp() << "Sent write request to server " << options.ip << ':' << options.port << endl;
             }
 
             //********************RECIEVING AND HANDLING FIRST ACK PACKET*****************//
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
                 retries++;
-                cout << timestamp() << "Connection timed out, sending last packet again.\n";
-                errorflag = true;
+                cout << timestamp() << "Connection timed out, sending last packet again\n";
                 continue;
             }
 
             //Getting TID
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
             strcpy(server_TID, server_port);
-            cout << "SERVER TID: " << server_TID << endl;
 
             //Looking at type of packet
             if (ntohs(*(short *)recvbuf) == OP_ERROR) //Error packet
@@ -327,31 +333,31 @@ int main(int argc, char *argv[])
             {
                 if (!handle_ack_packet(recvbuf, block_no))
                 {
+                    errorflag = true;
                     if (retries >= MAX_RETRIES)
                     {
-                        cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                        cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         return 0; //TODO:END OP, NOT PROGRAM
                     }
                     retries++;
-                    cout << timestamp() << "Unexpected block number, sending last packet again.\n";
-                    errorflag = true;
+                    cout << timestamp() << "Unexpected block number, sending last packet again\n";
                     continue;
                 }
                 else
                 {
-                    cout << timestamp() << "Recieved acknowledgement packet with block number 0.\n";
+                    cout << timestamp() << "Recieved acknowledgement packet with block number 0\n";
                 }
             }
             else //Other packet types are not expected -> error
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     return 0; //TODO:END OP, NOT PROGRAM
                 }
                 retries++;
-                errorflag = true;
-                cout << timestamp() << "Recieved unexpected packet type, sending request packet again.\n";
+                cout << timestamp() << "Recieved packet with unexpected packet type, sending request packet again\n";
                 continue;
             }
 
@@ -373,22 +379,46 @@ int main(int argc, char *argv[])
                 memset(data, 0, MAX_DATA_LEN);
                 file.read(data, options.size);
 
-
                 sendlen = build_data_packet(sendbuf, block_no, data, strlen(data));
             }
-            sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen);
+
+            if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)
+            {
+                errorflag = true;
+                if (retries >= MAX_RETRIES)
+                {
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
+                    break;
+                }
+                retries++;
+                cout << timestamp() << "Sending of data packet failed, sending packet again.\n";
+                continue;
+            }
+            else
+            {
+                if (errorflag)
+                {
+                    cout << timestamp() << "Sent last packet with a size of" << sentlen << " bytes again" << endl;
+                }
+                else
+                {
+                    cout << "Sent data packet with a size of " << sentlen - 4 << " bytes\n";
+                }
+                errorflag = false;
+                retries = 0;
+            }
 
             //********************RECIEVING AND HANDLING FIRST ACK PACKET*****************//
             if ((recvlen = recvfrom(sockfd, recvbuf, MAXBUFLEN, 0, (struct sockaddr *)&server_addr, &server_addrlen)) < 0)
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
                 retries++;
-                cout << timestamp() << "Connection timed out, sending last packet again.\n";
-                errorflag = true;
+                cout << timestamp() << "Connection timed out, sending last packet again\n";
                 continue;
             }
 
@@ -396,17 +426,16 @@ int main(int argc, char *argv[])
             getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
             if (strcmp(server_port, server_TID)) //TID doesn't match
             {
-
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                     break;
                 }
                 retries++;
-                cout << timestamp() << "TID's don't match, sending error packet and last sent packet.\n";
-                errlen = build_error_packet(errbuff, 5, "Unknown TID.");
+                cout << timestamp() << "Received packet with unexpected TID, sending last packet again\n";
+                errlen = build_error_packet(errbuff, 5, "Unexpected TID");
                 sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
-                errorflag = true;
                 continue;
             }
 
@@ -422,37 +451,40 @@ int main(int argc, char *argv[])
                 //Checking packet's block number
                 if (!handle_ack_packet(recvbuf, block_no)) //Block number is incorrect
                 {
+                    errorflag = true;
                     if (retries >= MAX_RETRIES)
                     {
-                        cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                        cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
                     retries++;
-                    cout << timestamp() << "Unexpected block number, sending last packet again.\n";
-                    errorflag = true;
+                    cout << timestamp() << "Received acknowledgement packet with unexpected block number, sending last packet again.\n";
                     continue;
                 }
                 else
                 {
-                    cout << timestamp() << "Recieved acknowledgement packet with block number " << block_no << ".\n";
+                    cout << timestamp() << "Recieved acknowledgement packet with block number " << block_no << endl;
                 }
             }
             else //Any other packet type is unexpected
             {
+                errorflag = true;
                 if (retries >= MAX_RETRIES)
                 {
-                    cout << timestamp() << "Operation was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
+                    cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished.\n";
                     break;
                 }
                 retries++;
-                cout << timestamp() << "Unexpected packet type, sending last packet again.\n";
-                errorflag = true;
+                cout << timestamp() << "Received packet with unexpected packet type, sending last packet again.\n";
                 continue;
             }
 
-            retries = 0;
         } while (sentlen == options.size + 4 || errorflag); //Loop continues until data size is less than selected and no packet is waiting to be sent again
 
+        if (!errorflag)
+        {
+            cout << timestamp() << "Transfer completed\n";
+        }
         file.close();
     }
 

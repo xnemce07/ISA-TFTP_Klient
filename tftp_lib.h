@@ -64,6 +64,8 @@ int build_data_packet(char *buffer, int block_no, char *data,int size);
  */
 int build_ack_packet(char *buffer, int block_no);
 
+
+//TODO: This function is not working properly
 /**
  * @brief Build an error packet
  * 
@@ -102,3 +104,13 @@ bool handle_data_packet(char *buffer, int expected_block_no, int recvbytes, ofst
  * @return String with the timestamp
  */
 string timestamp();
+
+
+//TODO: inline?
+/**
+ * @brief Get packet type code from packet
+ * 
+ * @param packet Received packet
+ * @return packet type code
+ */
+uint16_t get_packet_type_code(char *packet);
