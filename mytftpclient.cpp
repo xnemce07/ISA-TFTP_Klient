@@ -149,7 +149,6 @@ int main(int argc, char *argv[])
 
         do
         {
-
             //************SENDING LAST PACKET AGAIN ON ERROR*******************//
             if (errorflag) //On error, last packet is sent again
             {
@@ -440,13 +439,13 @@ int main(int argc, char *argv[])
             }
 
             //Looking at type of the packet
-            if (ntohs(*(short *)recvbuf) == OP_ERROR) //Error packet
+            if (get_packet_type_code(recvbuf) == OP_ERROR) //Error packet
             {
                 cout << timestamp() << "Error: " << recvbuf + 4 << endl;
                 freeaddrinfo(server_servinfo);
                 break;
             }
-            else if (ntohs(*(short *)recvbuf) == OP_ACK) //ACK packet
+            else if (get_packet_type_code(recvbuf) == OP_ACK) //ACK packet
             {
                 //Checking packet's block number
                 if (!handle_ack_packet(recvbuf, block_no)) //Block number is incorrect
