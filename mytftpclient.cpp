@@ -14,7 +14,7 @@
 #define MAX_RETRIES 1
 #define PORTLEN 6
 
-int main(int argc, char *argv[])
+int main()
 {
     using namespace std;
 

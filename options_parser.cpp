@@ -155,7 +155,6 @@ bool get_options(args *options)
 {
 
     string input_line;
-    bool errorflag = false;
     int item_count = 0;
     char **my_argv;
     bool repeat_flag = false;
