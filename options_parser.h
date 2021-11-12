@@ -28,4 +28,4 @@ struct args
  * 
  * @param options Args structure that will be filled with options
  */
-void get_options(args *options);
+bool get_options(args *options);

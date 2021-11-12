@@ -1,4 +1,4 @@
-#include "option_parser.h"
+#include "options_parser.h"
 
 using namespace std;
 
@@ -38,8 +38,24 @@ bool check_options(args *options);
  */
 int count_items(string str);
 
+/**
+ * @brief Sets args* structure into its default state
+ * 
+ * @param options Args* structure to reset
+ */
+void reset_options(args *options);
+
+/**
+ * @brief Frees alocated memory in my_argv
+ * 
+ * @param my_argv my_argv
+ * @param item_count Number of allocated arrays in my_argv
+ */
+void free_argv(char **my_argv, int item_count);
+
 bool argparser(args *options, int argc, char *argv[])
 {
+    optind = 1;
     int opt_val = 0;
     string adress = "";
 
@@ -135,27 +151,54 @@ bool check_options(args *options)
 }
 
 //TODO: MAKE THIS BOOL AND ADD A QUIT COMMAND
-void get_options(args *options)
+bool get_options(args *options)
 {
 
     string input_line;
     bool errorflag = false;
-    int item_count;
-    char **myArgv;
+    int item_count = 0;
+    char **my_argv;
+    bool repeat_flag = false;
 
     do
     {
+        reset_options(options);
         cout << '>';
         getline(cin, input_line);
+        if(!input_line.compare("quit") || !input_line.compare("exit")){
+            return false;
+        }
         item_count = count_items(input_line);
-        //char *myArgv[item_count + 1];
-        myArgv = new char*[item_count + 1];
+        my_argv = new char *[item_count + 1];
+        fill_argv(input_line, my_argv);
+        repeat_flag = (!argparser(options, item_count + 1, my_argv) || !check_options(options));
+        free_argv(my_argv, item_count);
+    } while (repeat_flag);
 
-        fill_argv(input_line, myArgv);
-    }while(!argparser(options, item_count + 1, myArgv) || !check_options(options));
+    return true;
+}
 
-    
+void reset_options(args *options)
+{
+    options->read = false;
+    options->write = false;
+    options->path = "";
+    options->timeout = 0;
+    options->size = 512;
+    options->multicast = false;
+    options->mode = "octet";
+    options->ip = "127.0.0.1";
+    options->port = "69";
+    return;
+}
 
+void free_argv(char **my_argv, int item_count)
+{
+    for (int i = 1; i <= item_count; i++)
+    {
+        delete (my_argv[i]);
+    }
+    delete (my_argv);
 }
 
 int count_items(string str)
@@ -192,19 +235,20 @@ int count_items(string str)
 
 void fill_argv(string line, char *my_argv[])
 {
-
-    my_argv[0] = (char *)"path"; //First argument, that will be skipped by getopt()
+    //TODO: change to null
+    my_argv[0] = (char *)"n"; //First argument, that will be skipped by getopt()
 
     bool whitespace_flag = true, quotation_flag = false;
     int counter = 1;
     string word = "";
+    char *word_c;
 
     for (size_t i = 0; i < line.length(); i++)
     {
         char current = line[i];
         if ((current == ' ' || current == '\t') && !whitespace_flag && !quotation_flag)
         {
-            char *word_c = new char[word.length()];
+            word_c = new char[word.length()];
             strcpy(word_c, word.c_str());
             my_argv[counter] = word_c;
             word = "";
@@ -223,9 +267,12 @@ void fill_argv(string line, char *my_argv[])
         }
     }
 
-    char *word_c = new char[word.length()];
+    word_c = new char[word.length()];
     strcpy(word_c, word.c_str());
     my_argv[counter] = word_c;
+
+    cout << my_argv[1] << endl;
+    cout << my_argv[2] << endl;
 
     return;
 }
