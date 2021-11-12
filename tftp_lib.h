@@ -12,8 +12,8 @@
 #define OP_ERROR 5
 
 #define MAXBUFLEN 1024
-#define MAX_DATA_LEN 600
-#define TIMEOUT 10
+#define MAX_DATA_LEN 1020
+
 
 using namespace std;
 
@@ -65,7 +65,7 @@ int build_data_packet(char *buffer, int block_no, char *data,int size);
 int build_ack_packet(char *buffer, int block_no);
 
 
-//TODO: This function is not working properly
+
 /**
  * @brief Build an error packet
  * 
@@ -106,7 +106,7 @@ bool handle_data_packet(char *buffer, int expected_block_no, int recvbytes, ofst
 string timestamp();
 
 
-//TODO: inline?
+
 /**
  * @brief Get packet type code from packet
  * 

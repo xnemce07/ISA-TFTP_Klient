@@ -14,27 +14,20 @@
 #define MAX_RETRIES 1
 #define PORTLEN 6
 
-
 int main(int argc, char *argv[])
 {
     using namespace std;
 
-    //TODO: MEMORY LEAKS
-    //TODO: PUT EVERYTHING IN A LOOP
     args *options = new (args);
     //bool quit_flag = false;
 
     while (true)
     {
 
-        if(!get_options(options))
+        if (!get_options(options))
         {
             break;
         }
-
-        //TODO: Randomize tid
-        //TODO: Do I even need to set my own TID and use bind()?? yes
-        const char *my_tid = "3232";
 
         //**************Finding a match and creating a socket + bind******************////
         struct addrinfo client_hints, *client_servinfo, *p_client;
@@ -49,7 +42,7 @@ int main(int argc, char *argv[])
         client_hints.ai_socktype = SOCK_DGRAM;
         client_hints.ai_flags = AI_PASSIVE;
 
-        if ((rv = getaddrinfo(NULL, my_tid, &client_hints, &client_servinfo)) != 0)
+        if ((rv = getaddrinfo(NULL, "0", &client_hints, &client_servinfo)) != 0)
         {
             cerr << "Client getaddrinfo: " << gai_strerror(rv) << endl;
             return 1;
@@ -70,7 +63,7 @@ int main(int argc, char *argv[])
         {
             for (p_server = server_servinfo; p_server != NULL; p_server = p_server->ai_next)
             {
-                //TODO: check if we also need to compare ai_protocol and ai_socktype
+
                 if (p_server->ai_family != p_client->ai_family)
                 {
                     continue;
@@ -144,7 +137,7 @@ int main(int argc, char *argv[])
             }
             else
             {
-                //TODO: Get address from p_server
+                
                 cout << timestamp() << "Sent read request to server " << options->ip << ':' << options->port << endl;
             }
 
@@ -303,6 +296,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
+                    
                     cout << timestamp() << "Sent write request to server " << options->ip << ':' << options->port << endl;
                 }
 
@@ -329,7 +323,7 @@ int main(int argc, char *argv[])
                 {
                     cout << timestamp() << "Error: " << recvbuf + 4 << endl;
                     errorflag = true;
-                    return 0; //TODO:END OP, NOT PROGRAM
+                    break;
                 }
                 else if (ntohs(*(short *)recvbuf) == OP_ACK) //ACK Packet
                 {
@@ -339,7 +333,7 @@ int main(int argc, char *argv[])
                         if (retries >= MAX_RETRIES)
                         {
                             cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
-                            return 0; //TODO:END OP, NOT PROGRAM
+                            break;
                         }
                         retries++;
                         cout << timestamp() << "Unexpected block number, sending last packet again\n";
@@ -356,7 +350,7 @@ int main(int argc, char *argv[])
                     if (retries >= MAX_RETRIES)
                     {
                         cout << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
-                        return 0; //TODO:END OP, NOT PROGRAM
+                        break;
                     }
                     retries++;
                     cout << timestamp() << "Recieved packet with unexpected packet type, sending request packet again\n";
@@ -367,7 +361,13 @@ int main(int argc, char *argv[])
                 errorflag = false;
             } while (errorflag);
 
-            cout << "CONNECTION ESTABLISHED.\n";
+            if (errorflag) //If previous part ended with error, dont continue, free resources and continue
+            {
+                file.close();
+                freeaddrinfo(server_servinfo);
+                close(sockfd);
+                continue;
+            }
 
             //*********************************SENDING DATA LOOP****************************//
 

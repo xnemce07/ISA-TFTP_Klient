@@ -124,7 +124,7 @@ bool check_options(args *options)
 
     if (options->timeout < 0)
     {
-        cout << "Tiemout cannot be 0 or negative.\n";
+        cout << "Tiemout cannot be negative.\n";
         return false;
     }
 
@@ -150,7 +150,7 @@ bool check_options(args *options)
     return true;
 }
 
-//TODO: MAKE THIS BOOL AND ADD A QUIT COMMAND
+
 bool get_options(args *options)
 {
 
@@ -183,7 +183,7 @@ void reset_options(args *options)
     options->read = false;
     options->write = false;
     options->path = "";
-    options->timeout = 0;
+    options->timeout = DEFAULT_TIMEOUT;
     options->size = 512;
     options->multicast = false;
     options->mode = "octet";
@@ -235,8 +235,8 @@ int count_items(string str)
 
 void fill_argv(string line, char *my_argv[])
 {
-    //TODO: change to null
-    my_argv[0] = (char *)"n"; //First argument, that will be skipped by getopt()
+    
+    my_argv[0] = NULL; //First argument, that will be skipped by getopt()
 
     bool whitespace_flag = true, quotation_flag = false;
     int counter = 1;
@@ -270,9 +270,6 @@ void fill_argv(string line, char *my_argv[])
     word_c = new char[word.length()];
     strcpy(word_c, word.c_str());
     my_argv[counter] = word_c;
-
-    cout << my_argv[1] << endl;
-    cout << my_argv[2] << endl;
 
     return;
 }
