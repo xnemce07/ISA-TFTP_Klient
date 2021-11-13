@@ -45,7 +45,7 @@ int main()
         if ((rv = getaddrinfo(NULL, "0", &client_hints, &client_servinfo)) != 0)
         {
             cerr << "Client getaddrinfo: " << gai_strerror(rv) << endl;
-            return 1;
+            continue;
         }
 
         //SERVER getaddrinfo()
@@ -56,7 +56,8 @@ int main()
         if ((rv = getaddrinfo(options->ip.c_str(), options->port.c_str(), &server_hints, &server_servinfo)) != 0)
         {
             cerr << "Server getaddrinfo: " << gai_strerror(rv) << endl;
-            return 1;
+            freeaddrinfo(client_servinfo);
+            continue;
         }
 
         for (p_client = client_servinfo; p_client != NULL; p_client = p_client->ai_next)
@@ -95,11 +96,12 @@ int main()
             perror("Creating a socket failed");
             freeaddrinfo(client_servinfo);
             freeaddrinfo(server_servinfo);
-            return 1;
+            continue;
         }
 
         freeaddrinfo(client_servinfo);
 
+        //setting timeout
         if (options->timeout > 0)
         {
             struct timeval timeout;
@@ -107,7 +109,7 @@ int main()
             timeout.tv_usec = 0;
             if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
             {
-                perror("Setsockopt");
+                perror("Setting timeout");
             }
         }
 
@@ -131,7 +133,7 @@ int main()
             sendlen = build_rrq_packet(sendbuf, options->path, options->mode, options->size, options->timeout);
             if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
             {
-                cerr << timestamp() << "Sending read request packet error: " << strerror(errno) << " Attempting to send packet again\n";
+                cout << timestamp() << "Sending read request packet error: " << strerror(errno) << " Attempting to send packet again\n";
                 block_no = 1;
                 errorflag = true;
             }
@@ -156,7 +158,7 @@ int main()
                             cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                             break;
                         }
-                        cerr << timestamp() << "Resending last packet error: " << strerror(errno) << endl;
+                        cout << timestamp() << "Resending last packet error: " << strerror(errno) << endl;
                         continue;
                     }
                     else
@@ -180,7 +182,7 @@ int main()
                         cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
-                    cerr << timestamp() << "Connection timed out, sending last packet again\n";
+                    cout << timestamp() << "Connection timed out, sending last packet again\n";
                     continue;
                 }
 
@@ -199,7 +201,7 @@ int main()
                         cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
-                    cerr << timestamp() << "Received packet with unexpected TID, sending last packet again and error packet\n";
+                    cout << timestamp() << "Received packet with unexpected TID, sending last packet again and error packet\n";
                     errlen = build_error_packet(errbuff, 5, "Unexpected TID");
                     sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                     continue;
@@ -229,7 +231,7 @@ int main()
                                 cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                                 break;
                             }
-                            cerr << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again\n";
+                            cout << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again\n";
                             continue;
                         }
                         else
@@ -245,7 +247,7 @@ int main()
                             cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                             break;
                         }
-                        cerr << timestamp() << "Recieved packet with unexpected block number, sending last packet again.\n";
+                        cout << timestamp() << "Recieved packet with unexpected block number, sending last packet again.\n";
                         continue;
                     }
                 }
@@ -254,7 +256,19 @@ int main()
                     oack_flag = true;
                     block_no--;
                     cout << timestamp() << "Received option acknowledgment packet:\n";
-                    handle_oack_packet(recvbuf, recvlen, options->size, &block_size, options->timeout, &timeout);
+                    handle_oack_packet(recvbuf, recvlen, options->size, &block_size, options->timeout, &timeout, 0);
+
+                    //CHANGE SOCKET TIMEOUT TO NEGOTIATED VALUE
+                    if (timeout != options->timeout)
+                    {
+                        struct timeval timeout;
+                        timeout.tv_sec = options->timeout;
+                        timeout.tv_usec = 0;
+                        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
+                        {
+                            perror("Setting timeout");
+                        }
+                    }
 
                     sendlen = build_ack_packet(sendbuf, 0);
 
@@ -266,7 +280,7 @@ int main()
                             cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                             break;
                         }
-                        cerr << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again\n";
+                        cout << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again\n";
                         continue;
                     }
                     else
@@ -283,7 +297,7 @@ int main()
                         cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
-                    cerr << timestamp() << "Received packet with unexpected packet type, sending last packet again\n";
+                    cout << timestamp() << "Received packet with unexpected packet type, sending last packet again\n";
                     continue;
                 }
 
@@ -298,12 +312,15 @@ int main()
         }
         else //**************************************************WRITING TO SERVER********************************************************************//
         {
-            ifstream file;
+            ifstream file, getsize;
+            getsize.open(options->path, ios::in | ios::binary | ios::ate);
+            int tsize = getsize.tellg();
+            getsize.close();
+
             file.open(options->path, ios::in | ios::binary);
-            int tsize = file.tellg();
             char data[MAX_DATA_LEN];
 
-            sendlen = build_wrq_packet(sendbuf, get_filename(options->path), options->mode, options->size, options->timeout, tsize);
+            sendlen = build_wrq_packet(sendbuf, get_filename(options->path), options->mode, tsize, options->size, options->timeout);
 
             //******************************ESTABLISHING CONNECTION*************************//
 
@@ -318,7 +335,7 @@ int main()
                         cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
                         break;
                     }
-                    cerr << timestamp() << "Sending write request packet error: " << strerror(errno) << " Sending packet again\n";
+                    cout << timestamp() << "Sending write request packet error: " << strerror(errno) << " Sending packet again\n";
                     retries++;
                     continue;
                 }
@@ -338,7 +355,7 @@ int main()
                         break;
                     }
                     retries++;
-                    cerr << timestamp() << "Connection timed out, sending last packet again\n";
+                    cout << timestamp() << "Connection timed out, sending last packet again\n";
                     continue;
                 }
 
@@ -346,14 +363,14 @@ int main()
                 getnameinfo((struct sockaddr *)&server_addr, server_addrlen, server_IP, sizeof(server_IP), server_port, sizeof(server_port), NI_NUMERICHOST | NI_NUMERICSERV);
                 strcpy(server_TID, server_port);
 
-                //Looking at type of packet
-                if (ntohs(*(short *)recvbuf) == OP_ERROR) //Error packet
+                //******************************************HANDLING PACKET DEPENDING ON PACKET TYPE***********************//
+                if (get_packet_type_code(recvbuf) == OP_ERROR) //Error packet
                 {
                     cout << timestamp() << "Error packet: " << recvbuf + 4 << endl;
                     errorflag = true;
                     break;
                 }
-                else if (ntohs(*(short *)recvbuf) == OP_ACK) //ACK Packet
+                else if (get_packet_type_code(recvbuf) == OP_ACK) //ACK Packet
                 {
                     if (!handle_ack_packet(recvbuf, block_no))
                     {
@@ -364,12 +381,29 @@ int main()
                             break;
                         }
                         retries++;
-                        cerr << timestamp() << "Unexpected block number, sending last packet again\n";
+                        cout << timestamp() << "Unexpected block number, sending last packet again\n";
                         continue;
                     }
                     else
                     {
                         cout << timestamp() << "Recieved acknowledgement packet with block number 0\n";
+                    }
+                }
+                else if (get_packet_type_code(recvbuf) == OP_OACK)
+                {
+                    cout << timestamp() << "Received option acknowledgment packet:\n";
+                    handle_oack_packet(recvbuf, recvlen, options->size, &block_size, options->timeout, &timeout, tsize);
+
+                    //CHANGE SOCKET TIMEOUT TO NEGOTIATED VALUE
+                    if (timeout != options->timeout)
+                    {
+                        struct timeval timeout;
+                        timeout.tv_sec = options->timeout;
+                        timeout.tv_usec = 0;
+                        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
+                        {
+                            perror("Setting timeout");
+                        }
                     }
                 }
                 else //Other packet types are not expected -> error
@@ -381,7 +415,7 @@ int main()
                         break;
                     }
                     retries++;
-                    cerr << timestamp() << "Recieved packet with unexpected packet type, sending request packet again\n";
+                    cout << timestamp() << "Recieved packet with unexpected packet type, sending request packet again\n";
                     continue;
                 }
 
@@ -421,7 +455,7 @@ int main()
                         break;
                     }
                     retries++;
-                    cerr << timestamp() << "Sending of data packet failed, sending packet again.\n";
+                    cout << timestamp() << "Sending of data packet failed, sending packet again.\n";
                     continue;
                 }
                 else
@@ -432,7 +466,7 @@ int main()
                     }
                     else
                     {
-                        cout << "Sent data packet with a size of " << sentlen - 4 << " bytes\n";
+                        cout << timestamp() << "Sent data packet with " << sentlen - 4 << " bytes of data\n";
                     }
                     errorflag = false;
                     retries = 0;
@@ -448,7 +482,7 @@ int main()
                         break;
                     }
                     retries++;
-                    cerr << timestamp() << "Connection timed out, sending last packet again\n";
+                    cout << timestamp() << "Connection timed out, sending last packet again\n";
                     continue;
                 }
 
@@ -463,7 +497,7 @@ int main()
                         break;
                     }
                     retries++;
-                    cerr << timestamp() << "Received packet with unexpected TID, sending last packet again\n";
+                    cout << timestamp() << "Received packet with unexpected TID, sending last packet again\n";
                     errlen = build_error_packet(errbuff, 5, "Unexpected TID");
                     sendto(sockfd, errbuff, errlen, 0, p_server->ai_addr, p_server->ai_addrlen);
                     continue;
@@ -489,7 +523,7 @@ int main()
                             break;
                         }
                         retries++;
-                        cerr << timestamp() << "Received acknowledgement packet with unexpected block number, sending last packet again.\n";
+                        cout << timestamp() << "Received acknowledgement packet with unexpected block number, sending last packet again.\n";
                         continue;
                     }
                     else
@@ -506,11 +540,11 @@ int main()
                         break;
                     }
                     retries++;
-                    cerr << timestamp() << "Received packet with unexpected packet type, sending last packet again.\n";
+                    cout << timestamp() << "Received packet with unexpected packet type, sending last packet again.\n";
                     continue;
                 }
 
-            } while (sentlen == options->size + 4 || errorflag); //Loop continues until data size is less than selected and no packet is waiting to be sent again
+            } while (sentlen == block_size + 4 || errorflag); //Loop continues until data size is less than selected and no packet is waiting to be sent again
 
             if (!errorflag)
             {

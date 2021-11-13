@@ -27,10 +27,13 @@ int build_rrq_packet(char *buffer, string path, string mode, int blocksize, int 
     }
 
     //timeout
-    strcpy(buffer + len, "timeout");
-    len += 8;
-    strcpy(buffer + len, to_string(timeout).c_str());
-    len += to_string(timeout).length() + 1;
+    if (timeout != 0)
+    {
+        strcpy(buffer + len, "timeout");
+        len += 8;
+        strcpy(buffer + len, to_string(timeout).c_str());
+        len += to_string(timeout).length() + 1;
+    }
     return len;
 }
 
@@ -60,10 +63,13 @@ int build_wrq_packet(char *buffer, string path, string mode, int transfersize, i
     }
 
     //timeout
-    strcpy(buffer + len, "timeout");
-    len += 8;
-    strcpy(buffer + len, to_string(timeout).c_str());
-    len += to_string(timeout).length() + 1;
+    if (timeout != 0)
+    {
+        strcpy(buffer + len, "timeout");
+        len += 8;
+        strcpy(buffer + len, to_string(timeout).c_str());
+        len += to_string(timeout).length() + 1;
+    }
     return len;
 }
 
@@ -161,7 +167,7 @@ uint16_t get_packet_type_code(char *packet)
     return ntohs(*(short *)packet);
 }
 
-void handle_oack_packet(char *buffer, int buffsize, int requested_blocksize, int *blocksize, int requested_timeout, int *timeout)
+void handle_oack_packet(char *buffer, int buffsize, int requested_blocksize, int *blocksize, int requested_timeout, int *timeout, int transfersize)
 {
 
     int pos = 2; //skip packet type
@@ -180,11 +186,11 @@ void handle_oack_packet(char *buffer, int buffsize, int requested_blocksize, int
             proposed_val = atoi(proposed_arr);
             if (proposed_val == requested_blocksize)
             {
-                cout << "\tServer accepted requested blocksize of " << proposed_val << " octets\n";
+                cout << "\tServer accepted requested blocksize of " << proposed_val << " bytes\n";
             }
             else
             {
-                cout << "\tServer did not accept requested blocksize and proposed one with size of " << proposed_val << " octets. Transfer will use this setting\n";
+                cout << "\tServer did not accept requested blocksize and proposed one with size of " << proposed_val << " bytes. Transfer will use this setting\n";
             }
             *blocksize = proposed_val;
         }
@@ -202,6 +208,20 @@ void handle_oack_packet(char *buffer, int buffsize, int requested_blocksize, int
                 cout << "\tServer did not accept requested timeout and proposed one with size of " << proposed_val << " seconds. Transfer will use this setting\n";
             }
             *timeout = proposed_val;
+        }
+        else if (!strcmp(opt, "tsize"))
+        {
+            strcpy(proposed_arr, buffer + pos);
+            pos += strlen(proposed_arr) + 1;
+            proposed_val = atoi(proposed_arr);
+            if (proposed_val == transfersize)
+            {
+                cout << "\tServer accepted requested transfersize of " << proposed_val << " bytes\n";
+            }
+            else
+            {
+                cout << "\tServer didn't accept transfersize\n";
+            }
         }
     }
     return;

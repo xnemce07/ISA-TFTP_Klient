@@ -115,4 +115,14 @@ string timestamp();
  */
 uint16_t get_packet_type_code(char *packet);
 
-void handle_oack_packet(char *buffer,int buffsize, int requested_blocksize, int *blocksize, int requested_timeout, int *timeout);
+/**
+ * @brief Parse aock packet and print information about how option negotiation went
+ * 
+ * @param buffer Buffer with oack packet
+ * @param buffsize Size of buffer
+ * @param requested_blocksize Blocksize tht was requested by client
+ * @param blocksize Pointer to int, where actual negotiated value will be stored
+ * @param requested_timeout Timeout tht was requested by client
+ * @param transfersize Transfersize that was sent with write request
+ */
+void handle_oack_packet(char *buffer, int buffsize, int requested_blocksize, int *blocksize, int requested_timeout, int *timeout, int transfersize);
