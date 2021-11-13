@@ -4,15 +4,11 @@
 #include <arpa/inet.h>
 #include <fstream>
 #include <cstring>
+#include <chrono>
+#include "tftp_macros.h"
 
-#define OP_RRQ 1 /* TFTP op-codes */
-#define OP_WRQ 2
-#define OP_DATA 3
-#define OP_ACK 4
-#define OP_ERROR 5
 
-#define MAXBUFLEN 1024
-#define MAX_DATA_LEN 1020
+
 
 
 using namespace std;

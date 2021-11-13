@@ -182,9 +182,9 @@ void reset_options(args *options)
     options->write = false;
     options->path = "";
     options->timeout = DEFAULT_TIMEOUT;
-    options->size = 512;
+    options->size = DEFAULT_BLOCKSIZE;
     options->multicast = false;
-    options->mode = "octet";
+    options->mode = DEFAULT_MODE;
     options->ip = "127.0.0.1";
     options->port = "69";
     return;

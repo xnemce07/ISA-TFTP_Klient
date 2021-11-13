@@ -3,8 +3,8 @@
 #include <iostream>
 #include <getopt.h>
 #include <regex>
+#include "tftp_macros.h"
 
-#define DEFAULT_TIMEOUT 10
 
 using namespace std;
 struct args
@@ -13,9 +13,9 @@ struct args
     bool write = false;
     string path = "";
     int timeout = DEFAULT_TIMEOUT;
-    int size = 512;
+    int size = DEFAULT_BLOCKSIZE;
     bool multicast = false;
-    string mode = "octet";
+    string mode = DEFAULT_MODE;
     string ip = "127.0.0.1";
     string port = "69";
 };

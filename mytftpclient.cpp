@@ -4,6 +4,7 @@
 
 #include "options_parser.h"
 #include "tftp_lib.h"
+#include "tftp_macros.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,8 +12,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define MAX_RETRIES 1
-#define PORTLEN 6
+
 
 int main()
 {
