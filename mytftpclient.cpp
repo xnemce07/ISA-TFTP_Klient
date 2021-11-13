@@ -14,6 +14,10 @@
 
 using namespace std;
 
+//TODO: MTU
+//TODO: BUFFER SIZES
+//TODO: Put everything into /src
+
 int main()
 {
 
@@ -74,13 +78,6 @@ int main()
                 {
                     continue;
                 }
-
-                //TODO: delete this
-                // if (bind(sockfd, p_client->ai_addr, p_client->ai_addrlen))
-                // {
-                //     close(sockfd);
-                //     continue;
-                // }
 
                 break;
             }
