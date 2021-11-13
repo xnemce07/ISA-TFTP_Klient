@@ -27,9 +27,11 @@ string get_filename(string path);
  * @param buffer Pointer to an array, where the packet will be built
  * @param path Path to the file
  * @param mode Mode of the file transfer
+ * @param blocksize Blocksize option for file transfer
+ * @param timeout Timeoute oprion for file transfer
  * @return Length of the packet
  */
-int build_rrq_packet(char *buffer, string path, string mode,int blocksize);
+int build_rrq_packet(char *buffer, string path, string mode,int blocksize, int timeout);
 
 /**
  * @brief Build a write request packet
@@ -37,9 +39,11 @@ int build_rrq_packet(char *buffer, string path, string mode,int blocksize);
  * @param buffer Pointer to an array, where the packet will be built
  * @param path Path to the file
  * @param mode Mode of the file transfer
+ * @param blocksize Blocksize option for file transfer
+ * @param timeout Timeoute oprion for file transfer
  * @return Length of the packet
  */
-int build_wrq_packet(char *buffer, string path, string mode);
+int build_wrq_packet(char *buffer, string path, string mode, int transfersize, int blocksize, int timeout);
 
 /**
  * @brief Build a data packet
@@ -110,3 +114,5 @@ string timestamp();
  * @return packet type code
  */
 uint16_t get_packet_type_code(char *packet);
+
+void handle_oack_packet(char *buffer,int buffsize, int requested_blocksize, int *blocksize, int requested_timeout, int *timeout);

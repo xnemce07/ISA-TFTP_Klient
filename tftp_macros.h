@@ -14,6 +14,6 @@
 
 #define PORTLEN 6
 
-#define DEFAULT_TIMEOUT 10
+#define DEFAULT_TIMEOUT 5
 #define DEFAULT_BLOCKSIZE 512
 #define DEFAULT_MODE "octet"

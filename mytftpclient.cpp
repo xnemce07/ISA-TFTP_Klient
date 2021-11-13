@@ -12,14 +12,14 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-
+using namespace std;
 
 int main()
 {
-    using namespace std;
 
     args *options = new (args);
-    //bool quit_flag = false;
+
+    int block_size = DEFAULT_BLOCKSIZE, timeout = DEFAULT_TIMEOUT;
 
     while (true)
     {
@@ -118,7 +118,7 @@ int main()
         char recvbuf[MAXBUFLEN], sendbuf[MAXBUFLEN], errbuff[MAXBUFLEN];
         char server_IP[INET6_ADDRSTRLEN], server_port[PORTLEN];
         char server_TID[PORTLEN] = "0";
-        bool errorflag = false;
+        bool errorflag = false, oack_flag = false;
         short retries = 0;
 
         //************************************READING FROM SERVER*************************************//
@@ -128,7 +128,7 @@ int main()
             file.open(get_filename(options->path), ios::out | ios::trunc);
 
             //**********************************SENDING WRITE REQUEST**************************//
-            sendlen = build_rrq_packet(sendbuf, options->path, options->mode,options->size);
+            sendlen = build_rrq_packet(sendbuf, options->path, options->mode, options->size, options->timeout);
             if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
             {
                 cerr << timestamp() << "Sending read request packet error: " << strerror(errno) << " Attempting to send packet again\n";
@@ -137,12 +137,13 @@ int main()
             }
             else
             {
-                
+
                 cout << timestamp() << "Sent read request to server " << options->ip << ':' << options->port << endl;
             }
 
             do
             {
+                oack_flag = false;
                 //************SENDING LAST PACKET AGAIN ON ERROR*******************//
                 if (errorflag) //On error, last packet is sent again
                 {
@@ -204,7 +205,8 @@ int main()
                     continue;
                 }
 
-                //Looking at type of received packet
+                //*******************************HANDLING PACKET DEPENDING ON PACKET TYPE*******************************//
+
                 if (get_packet_type_code(recvbuf) == OP_ERROR) //Handling of error packet
                 {
                     cout << timestamp() << "Error packet: " << recvbuf + 4 << endl;
@@ -216,7 +218,7 @@ int main()
                     if (handle_data_packet(recvbuf, block_no, recvlen, &file))
                     {
 
-                        cout << timestamp() << "Received data packet with a size of " << recvlen - 4 << " bytes\n";
+                        cout << timestamp() << "Received data packet with " << recvlen - 4 << " bytes of data\n";
 
                         sendlen = build_ack_packet(sendbuf, block_no);
                         if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)
@@ -247,6 +249,31 @@ int main()
                         continue;
                     }
                 }
+                else if (get_packet_type_code(recvbuf) == OP_OACK)
+                {
+                    oack_flag = true;
+                    block_no--;
+                    cout << timestamp() << "Received option acknowledgment packet:\n";
+                    handle_oack_packet(recvbuf, recvlen, options->size, &block_size, options->timeout, &timeout);
+
+                    sendlen = build_ack_packet(sendbuf, 0);
+
+                    if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)
+                    {
+                        errorflag = true;
+                        if (retries >= MAX_RETRIES)
+                        {
+                            cerr << timestamp() << "Transfer was unsuccessful after " << MAX_RETRIES << " retries and will not be finished\n";
+                            break;
+                        }
+                        cerr << timestamp() << "Sending acknowledgment packet error: " << strerror(errno) << " Sending packet again\n";
+                        continue;
+                    }
+                    else
+                    {
+                        cout << timestamp() << "Sent acknowledgement packet with block number 0\n";
+                    }
+                }
                 else //While reading from server, no other packet type is expected
                 {
 
@@ -261,7 +288,7 @@ int main()
                 }
 
                 retries = 0; //When this point is reached, any unsuccessful operation had to be completed, so we reset the retries counter
-            } while (recvlen == options->size + 4 || errorflag);
+            } while (recvlen == block_size + 4 || errorflag || oack_flag);
 
             if (!errorflag)
             {
@@ -273,9 +300,10 @@ int main()
         {
             ifstream file;
             file.open(options->path, ios::in | ios::binary);
+            int tsize = file.tellg();
             char data[MAX_DATA_LEN];
 
-            sendlen = build_wrq_packet(sendbuf, get_filename(options->path), options->mode);
+            sendlen = build_wrq_packet(sendbuf, get_filename(options->path), options->mode, options->size, options->timeout, tsize);
 
             //******************************ESTABLISHING CONNECTION*************************//
 
@@ -296,7 +324,7 @@ int main()
                 }
                 else
                 {
-                    
+
                     cout << timestamp() << "Sent write request to server " << options->ip << ':' << options->port << endl;
                 }
 
