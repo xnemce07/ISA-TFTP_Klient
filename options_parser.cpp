@@ -118,32 +118,31 @@ bool check_options(args *options)
 {
     if (options->read == options->write)
     {
-        cout << "Choose exactly one of these options: -W -R.\n";
+        cerr << "Choose exactly one of these options: -W -R.\n";
         return false;
     }
 
     if (options->timeout < 0)
     {
-        cout << "Tiemout cannot be negative.\n";
+        cerr << "Tiemout cannot be negative.\n";
         return false;
     }
 
     if (options->size < 0)
     {
-        cout << "Packet size cannot be 0 or negative.\n";
+        cerr << "Packet size cannot be 0 or negative.\n";
         return false;
     }
 
     if (options->path.empty())
     {
-        cout << "-d (path) is required.\n";
+        cerr << "-d (path) is required.\n";
         return false;
     }
 
     if (options->mode.compare("ascii") && options->mode.compare("netascii") && options->mode.compare("binary") && options->mode.compare("octet"))
     {
-        cout << "Invalid mode(-c) setting, choose ascii, netascii, binary or octet.\n"
-             << options->mode << endl;
+        cerr << "Invalid mode(-c) setting, choose ascii, netascii, binary or octet.\n";
         return false;
     }
 
