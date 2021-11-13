@@ -29,7 +29,7 @@ string get_filename(string path);
  * @param mode Mode of the file transfer
  * @return Length of the packet
  */
-int build_rrq_packet(char *buffer, string path, string mode);
+int build_rrq_packet(char *buffer, string path, string mode,int blocksize);
 
 /**
  * @brief Build a write request packet

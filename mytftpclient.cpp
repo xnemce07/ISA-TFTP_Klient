@@ -128,7 +128,7 @@ int main()
             file.open(get_filename(options->path), ios::out | ios::trunc);
 
             //**********************************SENDING WRITE REQUEST**************************//
-            sendlen = build_rrq_packet(sendbuf, options->path, options->mode);
+            sendlen = build_rrq_packet(sendbuf, options->path, options->mode,options->size);
             if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, p_server->ai_addr, p_server->ai_addrlen)) < 0)
             {
                 cerr << timestamp() << "Sending read request packet error: " << strerror(errno) << " Attempting to send packet again\n";
@@ -160,7 +160,7 @@ int main()
                     }
                     else
                     {
-                        cout << timestamp() << "Sent last packet with a size of" << sentlen << " bytes again" << endl;
+                        cout << timestamp() << "Sent last packet with a size of " << sentlen << " bytes again" << endl;
                         errorflag = false;
                     }
                 }

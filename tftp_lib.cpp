@@ -10,7 +10,7 @@ string get_filename(string path)
     return path.substr(path.find_last_of("/") + 1);
 }
 
-int build_rrq_packet(char *buffer, string path, string mode)
+int build_rrq_packet(char *buffer, string path, string mode, int blocksize)
 {
     memset(buffer, 0, MAXBUFLEN);
     int len = 2;
@@ -19,6 +19,10 @@ int build_rrq_packet(char *buffer, string path, string mode)
     len += path.length() + 1;
     memcpy(buffer + len, mode.c_str(), mode.length());
     len += mode.length() + 1;
+    strcpy(buffer + len,"blksize");
+    len += 8;
+    *(short *)(buffer + len) = htons(blocksize);
+    len += 3;
     return len;
 }
 
