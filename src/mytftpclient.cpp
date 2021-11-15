@@ -20,7 +20,6 @@ using namespace std;
 
 int main()
 {
-
     args *options = new (args);
 
     int block_size = DEFAULT_BLOCKSIZE, timeout = DEFAULT_TIMEOUT;
