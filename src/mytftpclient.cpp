@@ -435,8 +435,7 @@ int main()
 
                     memset(data, 0, MAX_DATA_LEN);
                     file.read(data, block_size);
-
-                    sendlen = build_data_packet(sendbuf, block_no, data, file.tellg()%block_size);
+                    sendlen = build_data_packet(sendbuf, block_no, data, file.gcount());
                 }
 
                 if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)
