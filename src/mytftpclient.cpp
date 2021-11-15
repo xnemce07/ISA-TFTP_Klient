@@ -14,9 +14,6 @@
 
 using namespace std;
 
-//TODO: MTU
-//TODO: BUFFER SIZES
-//TODO: Put everything into /src
 
 int main()
 {
@@ -437,9 +434,9 @@ int main()
                     block_no++;
 
                     memset(data, 0, MAX_DATA_LEN);
-                    file.read(data, options->size);
+                    file.read(data, block_size);
 
-                    sendlen = build_data_packet(sendbuf, block_no, data, strlen(data));
+                    sendlen = build_data_packet(sendbuf, block_no, data, file.tellg()%block_size);
                 }
 
                 if ((sentlen = sendto(sockfd, sendbuf, sendlen, 0, (struct sockaddr *)&server_addr, server_addrlen)) < 0)

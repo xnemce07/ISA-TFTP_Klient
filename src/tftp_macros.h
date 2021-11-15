@@ -9,8 +9,8 @@
 #define OP_ERROR 5
 #define OP_OACK 6
 
-#define MAXBUFLEN 1024
-#define MAX_DATA_LEN 1020
+#define MAXBUFLEN 2048
+#define MAX_DATA_LEN 2044
 
 #define PORTLEN 6
 
