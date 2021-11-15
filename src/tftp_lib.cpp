@@ -17,7 +17,7 @@ int build_rrq_packet(char *buffer, string path, string mode, int blocksize, int 
     memcpy(buffer + len, mode.c_str(), mode.length());
     len += mode.length() + 1;
 
-    //blocksize
+    //blocksize option
     if (blocksize != DEFAULT_BLOCKSIZE)
     {
         strcpy(buffer + len, "blksize");
@@ -26,8 +26,8 @@ int build_rrq_packet(char *buffer, string path, string mode, int blocksize, int 
         len += to_string(blocksize).length() + 1;
     }
 
-    //timeout
-    if (timeout != 0)
+    //timeout option
+    if (timeout > 0)
     {
         strcpy(buffer + len, "timeout");
         len += 8;
@@ -47,13 +47,13 @@ int build_wrq_packet(char *buffer, string path, string mode, int transfersize, i
     memcpy(buffer + len, mode.c_str(), mode.length());
     len += mode.length() + 1;
 
-    //transfersize
+    //transfersize option
     strcpy(buffer + len, "tsize");
     len += 6;
     strcpy(buffer + len, to_string(transfersize).c_str());
     len += to_string(transfersize).length() + 1;
 
-    //blocksize
+    //blocksize option
     if (blocksize != DEFAULT_BLOCKSIZE)
     {
         strcpy(buffer + len, "blksize");
@@ -62,8 +62,8 @@ int build_wrq_packet(char *buffer, string path, string mode, int transfersize, i
         len += to_string(blocksize).length() + 1;
     }
 
-    //timeout
-    if (timeout != 0)
+    //timeout option
+    if (timeout > 0)
     {
         strcpy(buffer + len, "timeout");
         len += 8;
