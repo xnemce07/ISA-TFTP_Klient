@@ -14,7 +14,6 @@ struct args
     string path = "";
     int timeout = DEFAULT_TIMEOUT;
     int size = DEFAULT_BLOCKSIZE;
-    bool multicast = false;
     string mode = DEFAULT_MODE;
     string ip = "127.0.0.1";
     string port = "69";

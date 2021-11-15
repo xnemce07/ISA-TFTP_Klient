@@ -59,7 +59,7 @@ bool argparser(args *options, int argc, char *argv[])
     int opt_val = 0;
     string adress = "";
 
-    while ((opt_val = getopt(argc, argv, "RWd:t:s:a:c:m")) != -1)
+    while ((opt_val = getopt(argc, argv, "RWd:t:s:a:c:")) != -1)
     {
         switch (opt_val)
         {
@@ -95,9 +95,6 @@ bool argparser(args *options, int argc, char *argv[])
             break;
         case 'c':
             options->mode = optarg;
-            break;
-        case 'm':
-            options->multicast = true;
             break;
         default:
             return false;
@@ -183,7 +180,6 @@ void reset_options(args *options)
     options->path = "";
     options->timeout = DEFAULT_TIMEOUT;
     options->size = DEFAULT_BLOCKSIZE;
-    options->multicast = false;
     options->mode = DEFAULT_MODE;
     options->ip = "127.0.0.1";
     options->port = "69";
